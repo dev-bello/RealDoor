@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/importMeta"]
+  },
+  "include": [
+    "src/lib/corpus.ts",
+    "src/lib/rules.functions.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ]
+}
