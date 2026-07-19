@@ -59,6 +59,7 @@ export interface ProfileIncomeSource {
   formula: string;
   documentId: string;
   documentType: OrganizerDocumentType;
+  conflictDocumentId: string | null;
   evidence: readonly ConfirmedFieldEvidence[];
   displayedGross: number | null;
   conflict: string | null;
@@ -121,6 +122,9 @@ export function buildProfileSummary(rows: readonly ProfileExtractionRow[]): Prof
   const wageDocuments = newestPerPerson(
     documents.filter((document) => document.documentType === "pay_stub"),
   );
+  const employmentDocuments = newestPerPerson(
+    documents.filter((document) => document.documentType === "employment_letter"),
+  );
   const benefitDocuments = newestPerPerson(
     documents.filter((document) => document.documentType === "benefit_letter"),
   );
@@ -133,7 +137,14 @@ export function buildProfileSummary(rows: readonly ProfileExtractionRow[]): Prof
   );
 
   const incomeSources = [
-    ...wageDocuments.map((document) => wageSource(document, sourceIssues)),
+    ...wageDocuments.map((document) =>
+      wageSource(
+        document,
+        employmentDocuments.find((employment) => personKey(employment) === personKey(document)) ??
+          null,
+        sourceIssues,
+      ),
+    ),
     ...benefitDocuments.map((document) => benefitSource(document, sourceIssues)),
     ...gigDocuments.map((document) => gigSource(document, sourceIssues)),
   ].filter(isPresent);
@@ -165,7 +176,7 @@ export function buildProfileSummary(rows: readonly ProfileExtractionRow[]): Prof
   const conflicts = new Map(
     incomeSources
       .filter((source) => source.conflict)
-      .map((source) => [source.documentId, source.conflict as string]),
+      .map((source) => [source.conflictDocumentId ?? source.documentId, source.conflict as string]),
   );
   const evidence: EvidenceRecord[] = documents.map((document) => ({
     id: document.id,
@@ -178,9 +189,13 @@ export function buildProfileSummary(rows: readonly ProfileExtractionRow[]): Prof
 
   const missingConfirmedInputs = [...sourceIssues];
   if (householdIds.length === 0)
-    missingConfirmedInputs.push("The organizer household ID is unavailable from the uploaded filename.");
+    missingConfirmedInputs.push(
+      "The organizer household ID is unavailable from the uploaded filename.",
+    );
   if (householdIds.length > 1)
-    missingConfirmedInputs.push("Confirmed documents reference more than one organizer household ID.");
+    missingConfirmedInputs.push(
+      "Confirmed documents reference more than one organizer household ID.",
+    );
   for (const document of documents) {
     if (document.missingEvidenceFields.length > 0) {
       missingConfirmedInputs.push(
@@ -297,6 +312,7 @@ export function joinConfirmedEvidence(row: ProfileExtractionRow): ConfirmedDocum
 
 function wageSource(
   document: ConfirmedDocumentEvidence,
+  employment: ConfirmedDocumentEvidence | null,
   issues: string[],
 ): ProfileIncomeSource | null {
   const hours = field(document, "regular_hours");
@@ -330,15 +346,31 @@ function wageSource(
     hours && rate && displayedGross !== null && Math.abs(displayedGross - amount) > 0.01
       ? `Displayed gross ${money(displayedGross)} differs from regular-hours components ${money(amount)} by ${money(Math.abs(displayedGross - amount))}.`
       : null;
+  const employmentHours = employment ? field(employment, "weekly_hours") : null;
+  const employmentRate = employment ? field(employment, "hourly_rate") : null;
+  const usesEmploymentEvidence = Boolean(
+    conflict && employment && employmentHours && employmentRate,
+  );
+  if (usesEmploymentEvidence) {
+    amount = cents(Number(employmentHours?.value) * Number(employmentRate?.value));
+    formula = `${numberText(Number(employmentHours?.value))} documented weekly hours x ${money(Number(employmentRate?.value))} hourly rate = ${money(amount)} per week`;
+    evidence = [
+      employmentHours as ConfirmedFieldEvidence,
+      employmentRate as ConfirmedFieldEvidence,
+    ];
+  }
   return {
     id: `wages:${personKey(document)}`,
     kind: "wages",
     personName,
     amount,
-    period: frequency,
+    period: usesEmploymentEvidence ? "weekly" : frequency,
     formula,
-    documentId: document.id,
-    documentType: document.documentType,
+    documentId: usesEmploymentEvidence ? (employment?.id ?? document.id) : document.id,
+    documentType: usesEmploymentEvidence
+      ? (employment?.documentType ?? document.documentType)
+      : document.documentType,
+    conflictDocumentId: conflict ? document.id : null,
     evidence: uniqueFields([
       ...evidence,
       ...(gross ? [gross] : []),
@@ -369,6 +401,7 @@ function benefitSource(
     formula: `${money(amount)} benefit x ${periodsPerYear(frequency)} ${frequency} periods/year`,
     documentId: document.id,
     documentType: document.documentType,
+    conflictDocumentId: null,
     evidence: uniqueFields([amountField, field(document, "benefit_frequency")]),
     displayedGross: null,
     conflict: null,
@@ -394,6 +427,7 @@ function gigSource(
     formula: `${money(amount)} confirmed gross receipts/month x 12 challenge-fixture months/year`,
     documentId: document.id,
     documentType: document.documentType,
+    conflictDocumentId: null,
     evidence: [receipts],
     displayedGross: null,
     conflict: null,

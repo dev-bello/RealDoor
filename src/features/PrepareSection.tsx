@@ -193,7 +193,8 @@ export function PrepareSection() {
                     setIncluded((current) => ({ ...current, [key]: event.target.checked }))
                   }
                 />
-                {label}{key === "evidence" ? " (required for traceability)" : ""}
+                {label}
+                {key === "evidence" ? " (required for traceability)" : ""}
               </label>
             ))}
           </div>

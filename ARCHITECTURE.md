@@ -10,24 +10,24 @@
 
 ## Field purpose allowlist
 
-| Field | Purpose |
-| --- | --- |
-| Person name | Reconcile independently documented synthetic income sources |
-| Household size | Select the exact frozen threshold row after confirmation |
-| Address | Let the renter verify the synthetic application-summary identity; never used in math |
-| Application date | Apply the frozen evidence-recency convention |
-| Pay date and pay-period dates | Select the newest recurring wage evidence and show its period |
-| Pay or benefit frequency | Select the deterministic annualization multiplier |
-| Regular/weekly hours and hourly rate | Reconcile displayed wage totals and identify conflicts |
-| Gross pay | Document the displayed recurring wage amount |
-| Net pay | Evidence review only; never used in threshold math |
-| Document date | Apply the frozen 60-day evidence-recency convention |
-| Monthly benefit | Add an independently documented recurring benefit source |
-| Statement month | Date the organizer gig-income fixture |
-| Gross receipts | Add the documented recurring gig source under the challenge convention |
-| Platform fees | Evidence review and conflict context; never silently deducted |
-| Confidence | Signal review urgency; never an applicant score |
-| Page and source box | Preserve traceability from every material value to evidence |
+| Field                                | Purpose                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| Person name                          | Reconcile independently documented synthetic income sources                          |
+| Household size                       | Select the exact frozen threshold row after confirmation                             |
+| Address                              | Let the renter verify the synthetic application-summary identity; never used in math |
+| Application date                     | Apply the frozen evidence-recency convention                                         |
+| Pay date and pay-period dates        | Select the newest recurring wage evidence and show its period                        |
+| Pay or benefit frequency             | Select the deterministic annualization multiplier                                    |
+| Regular/weekly hours and hourly rate | Reconcile displayed wage totals and identify conflicts                               |
+| Gross pay                            | Document the displayed recurring wage amount                                         |
+| Net pay                              | Evidence review only; never used in threshold math                                   |
+| Document date                        | Apply the frozen 60-day evidence-recency convention                                  |
+| Monthly benefit                      | Add an independently documented recurring benefit source                             |
+| Statement month                      | Date the organizer gig-income fixture                                                |
+| Gross receipts                       | Add the documented recurring gig source under the challenge convention               |
+| Platform fees                        | Evidence review and conflict context; never silently deducted                        |
+| Confidence                           | Signal review urgency; never an applicant score                                      |
+| Page and source box                  | Preserve traceability from every material value to evidence                          |
 
 Do not add protected characteristics, immigration status, disability or health data, inferred relationships, or free-form applicant profiling. The allowlist supports evidence review and readiness only.
 

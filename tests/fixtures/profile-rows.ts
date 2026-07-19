@@ -24,6 +24,7 @@ function row(
     doc_type,
     confirmed_json,
     raw_json: {
+      household_id: "HH-TEST",
       fields: Object.entries(confirmed_json).map(([field, value], index) =>
         rawField(field, value, index),
       ),

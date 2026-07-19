@@ -101,7 +101,7 @@ describe("profile scenarios", () => {
         : extraction,
     );
     const summary = buildProfileSummary(rows);
-    expect(summary.annualIncome).toBe(35_000);
+    expect(summary.annualIncome).toBe(61_000);
     expect(summary.readiness.status).toBe("NEEDS_REVIEW");
     expect(summary.readiness.reasons).toEqual(
       expect.arrayContaining([

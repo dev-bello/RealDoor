@@ -13,8 +13,13 @@ function withSecurityHeaders(response: Response): Response {
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  headers.set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
-  if (headers.get("content-type")?.includes("text/html")) headers.set("Cache-Control", "no-store");
+  headers.set(
+    "Content-Security-Policy",
+    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+  );
+  const contentType = headers.get("content-type") ?? "";
+  if (contentType.includes("text/html") || contentType.includes("application/json"))
+    headers.set("Cache-Control", "no-store");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -67,10 +72,12 @@ export default {
       return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return withSecurityHeaders(new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      }));
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

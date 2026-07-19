@@ -27,4 +27,5 @@ Provider and database variables are deployment-specific. See `MODEL_DISCLOSURE.m
 - `MODEL_DISCLOSURE.md`: provider configuration and retention disclosure template
 
 The bundled starter pack is marked **DRAFT** and not yet licensed for external distribution. Do not redistribute pack assets until organizer approval and an applicable license are confirmed.
+
 # RealDoor

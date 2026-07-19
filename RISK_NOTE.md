@@ -19,3 +19,5 @@ These controls do not prove extraction accuracy, corpus authenticity, export saf
 ## Pack status
 
 The bundled starter pack says **DRAFT - organizer approval required** and **not yet licensed for external distribution**. Its data, documents, gold labels, and other assets must not be redistributed or treated as production-authorized until the organizer supplies approvals and a license. This repository does not grant rights to third-party source material.
+
+The pack's HH-003 and HH-006 checklist records list an employment letter as required and missing while also labeling the household `READY_TO_REVIEW`. RealDoor follows the controlling `CH-READINESS-001` rule conservatively: missing required evidence produces `NEEDS_REVIEW` until an organizer resolves that contradiction.

@@ -214,8 +214,8 @@ function responseSchema(docType: DocumentType) {
     required: ["fields", "security"],
     properties: {
       fields: {
-          type: "array",
-          minItems: 1,
+        type: "array",
+        minItems: 1,
         items: {
           type: "object",
           additionalProperties: false,
@@ -536,9 +536,7 @@ export const confirmExtraction = createServerFn({ method: "POST" })
         .eq("id", data.id)
         .eq("user_id", context.userId);
       if (rollbackError) console.error("Could not roll back unaudited field review", data.id);
-      throw new Error(
-        "Review could not be completed because its audit event was not recorded.",
-      );
+      throw new Error("Review could not be completed because its audit event was not recorded.");
     }
     return { ok: true };
   });

@@ -73,13 +73,16 @@ function reviewedFieldsFromRow(raw: unknown, confirmed: unknown): ExtractionFiel
   const fields = fieldsFromRaw(raw);
   if (!fields || !confirmed || typeof confirmed !== "object") return fields;
   const values = confirmed as Record<string, unknown>;
-  return fields.map((field) => ({
-    ...field,
-    value:
-      typeof values[field.field] === "string" || typeof values[field.field] === "number"
-        ? values[field.field]
-        : field.value,
-  }));
+  return fields.map((field) => {
+    const confirmedValue = values[field.field];
+    return {
+      ...field,
+      value:
+        typeof confirmedValue === "string" || typeof confirmedValue === "number"
+          ? confirmedValue
+          : field.value,
+    };
+  });
 }
 
 export function ProfileSection() {
