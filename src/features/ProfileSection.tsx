@@ -44,6 +44,19 @@ const FIELD_LABELS: Record<FieldName, string> = {
   platform_fees: "Platform fees",
 };
 
+function inferDocTypeFromName(fileName: string): DocumentType | null {
+  const normalized = fileName.toLowerCase();
+  const withoutExt = normalized.replace(/\.[^.]+$/, "");
+  for (const type of DOCUMENT_TYPES) {
+    const snake = type;
+    const kebab = type.replace(/_/g, "-");
+    if (withoutExt.includes(snake) || withoutExt.includes(kebab)) {
+      return type;
+    }
+  }
+  return null;
+}
+
 type ReviewField = ExtractionField & { review?: "confirmed" | "corrected" };
 type Current = {
   id: string;
@@ -51,6 +64,8 @@ type Current = {
   resumed: boolean;
   injectionStatus: "none_detected" | "detected_and_ignored";
 };
+
+type UploadPayload = { file: File; docType: DocumentType };
 
 function injectionStatusFromRaw(raw: unknown): Current["injectionStatus"] {
   if (!raw || typeof raw !== "object" || !("security" in raw)) return "none_detected";
@@ -131,7 +146,7 @@ export function ProfileSection() {
       : null);
 
   const upload = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, docType }: UploadPayload) => {
       await ensureSession();
       const fileBase64 = await fileToBase64(file);
       const response = await extract({
@@ -144,9 +159,9 @@ export function ProfileSection() {
           providerProcessingConsent: true,
         },
       });
-      return { response, file };
+      return { response, file, docType };
     },
-    onSuccess: ({ response, file }) => {
+    onSuccess: ({ response, file, docType }) => {
       setSelected({
         id: response.id,
         fields: response.fields,
@@ -157,7 +172,9 @@ export function ProfileSection() {
         if (previous) URL.revokeObjectURL(previous.url);
         return { url: URL.createObjectURL(file), mimeType: file.type, name: file.name };
       });
-      setAnnouncement("Extraction complete. Review each field before saving.");
+      setAnnouncement(
+        `Extraction complete for ${DOCUMENT_LABELS[docType] ?? docType}. Review each field before saving.`,
+      );
       queryClient.invalidateQueries({ queryKey: ["extractions"] });
       if (fileRef.current) fileRef.current.value = "";
     },
@@ -261,22 +278,53 @@ export function ProfileSection() {
               ref={fileRef}
               type="file"
               accept="application/pdf,image/png,image/jpeg"
+              multiple
               disabled={upload.isPending || !consentReady}
               onChange={(event) => {
                 setFileError(null);
-                const file = event.target.files?.[0];
-                if (!file) return;
-                if (!["application/pdf", "image/png", "image/jpeg"].includes(file.type)) {
-                  setFileError("Choose a PDF, PNG, or JPEG synthetic document.");
+                const files = event.target.files;
+                if (!files || files.length === 0) return;
+                if (upload.isPending) {
+                  setFileError("Wait until the current extraction finishes before adding more files.");
                   event.target.value = "";
                   return;
                 }
-                if (file.size > 5 * 1024 * 1024) {
-                  setFileError("The document exceeds the 5 MB limit.");
+
+                const tasks: UploadPayload[] = [];
+                for (const file of Array.from(files)) {
+                  if (!file) continue;
+                  if (!["application/pdf", "image/png", "image/jpeg"].includes(file.type)) {
+                    setFileError("Choose a PDF, PNG, or JPEG synthetic document.");
+                    continue;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    setFileError("The document exceeds the 5 MB limit.");
+                    continue;
+                  }
+                  const inferred = inferDocTypeFromName(file.name) ?? docType;
+                  tasks.push({ file, docType: inferred });
+                }
+
+                if (tasks.length === 0) {
                   event.target.value = "";
                   return;
                 }
-                upload.mutate(file);
+
+                void (async () => {
+                  for (const task of tasks) {
+                    try {
+                      await upload.mutateAsync(task);
+                    } catch (error) {
+                      if (error instanceof Error) {
+                        setFileError(error.message);
+                      } else {
+                        setFileError("The extraction request failed.");
+                      }
+                      break;
+                    }
+                  }
+                })();
+                event.target.value = "";
               }}
               className="mt-1 block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-foreground file:px-4 file:py-2 file:text-background hover:file:bg-accent disabled:opacity-50"
             />

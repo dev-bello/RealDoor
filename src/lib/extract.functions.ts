@@ -227,22 +227,20 @@ function responseSchema(docType: DocumentType) {
             page: { type: "integer", minimum: 1 },
             bbox: {
               type: "array",
-              prefixItems: [
-                { type: "number", minimum: 0, maximum: 612 },
-                { type: "number", minimum: 0, maximum: 792 },
-                { type: "number", minimum: 0, maximum: 612 },
-                { type: "number", minimum: 0, maximum: 792 },
-              ],
+              items: { type: "number" },
               minItems: 4,
               maxItems: 4,
             },
             page_size: {
               type: "array",
-              prefixItems: [{ const: 612 }, { const: 792 }],
+              items: { type: "number" },
               minItems: 2,
               maxItems: 2,
             },
-            bbox_units: { const: "pdf_points_bottom_left_origin" },
+            bbox_units: {
+              type: "string",
+              const: "pdf_points_bottom_left_origin",
+            },
           },
         },
       },
@@ -271,8 +269,15 @@ async function callProvider(
 ): Promise<z.infer<typeof ModelOutput>> {
   const apiKey = process.env.OPENAI_API_KEY ?? process.env.AI_API_KEY;
   const apiUrl = process.env.AI_API_URL ?? "https://api.openai.com/v1/responses";
-  const model = process.env.AI_MODEL ?? "gpt-4.1-mini-2025-04-14";
-  if (!apiKey) throw new Error("PROVIDER_UNAVAILABLE");
+  const model = process.env.AI_MODEL ?? "gpt-4.1";
+  if (!apiKey) {
+    console.error(
+      "[extract.callProvider] Missing OPENAI_API_KEY/AI_API_KEY. docType=%s model=%s",
+      docType,
+      model,
+    );
+    throw new Error("MISSING_AI_PROVIDER_KEY");
+  }
 
   let response: Response;
   try {
@@ -313,16 +318,45 @@ async function callProvider(
       }),
     });
   } catch (error) {
-    console.error("AI provider request failed", error instanceof Error ? error.name : "unknown");
-    throw new Error("PROVIDER_UNAVAILABLE");
+    const errorName = error instanceof Error ? error.name : "unknown";
+    console.error(
+      "[extract.callProvider] Fetch failed. docType=%s model=%s error=%s",
+      docType,
+      model,
+      errorName,
+    );
+    throw new Error("AI_PROVIDER_NETWORK_ERROR");
   }
+  const rawResponse = await response.text();
   if (!response.ok) {
-    console.error("AI provider returned an error", response.status);
-    throw new Error("PROVIDER_UNAVAILABLE");
+    console.error(
+      "[extract.callProvider] Provider error. docType=%s model=%s status=%s body=%s",
+      docType,
+      model,
+      response.status,
+      rawResponse.slice(0, 1000),
+    );
+    if (response.status === 401) throw new Error("AI_PROVIDER_UNAUTHORIZED");
+    if (response.status === 403) throw new Error("AI_PROVIDER_FORBIDDEN");
+    if (response.status === 404) throw new Error("AI_PROVIDER_NOT_FOUND");
+    if (response.status === 429) throw new Error("AI_PROVIDER_RATE_LIMITED");
+    if (response.status === 400) {
+      let message = "";
+      try {
+        message = JSON.parse(rawResponse)?.error?.message ?? rawResponse;
+      } catch {
+        message = rawResponse;
+      }
+      const error = new Error("AI_PROVIDER_SCHEMA_ERROR");
+      (error as Error & { details?: string }).details = message;
+      throw error;
+    }
+    if (response.status >= 500) throw new Error("AI_PROVIDER_SERVER_ERROR");
+    throw new Error(`AI_PROVIDER_HTTP_${response.status}`);
   }
 
   try {
-    const data = await response.json();
+    const data = rawResponse ? JSON.parse(rawResponse) : undefined;
     const raw =
       typeof data?.output_text === "string"
         ? data.output_text
@@ -337,7 +371,11 @@ async function callProvider(
     return { ...parsed, fields: validateFields(docType, parsed) };
   } catch (error) {
     if (error instanceof Error && error.message === "UNTRUSTED_INSTRUCTION") throw error;
-    console.error("AI provider response failed validation");
+    console.error(
+      "[extract.callProvider] Response validation failed. docType=%s model=%s",
+      docType,
+      model,
+    );
     throw new Error("INVALID_EXTRACTION");
   }
 }
@@ -354,8 +392,51 @@ function publicExtractionError(error: unknown): Error {
       "Extraction rejected because the evidence response was invalid. No result was retained.",
     );
   }
-  if (code === "PROVIDER_UNAVAILABLE")
-    return new Error("Extraction service is temporarily unavailable. Try again later.");
+  if (code === "MISSING_AI_PROVIDER_KEY") {
+    return new Error(
+      "Extraction service is not configured. Set OPENAI_API_KEY (or AI_API_KEY) on the server and redeploy.",
+    );
+  }
+  if (code === "AI_PROVIDER_UNAUTHORIZED") {
+    return new Error(
+      "The AI provider rejected the credentials. Verify the OpenAI key and model access, then try again.",
+    );
+  }
+  if (code === "AI_PROVIDER_NOT_FOUND") {
+    return new Error(
+      "The configured AI_MODEL is unavailable. Update AI_MODEL to a supported Responses model or remove the override.",
+    );
+  }
+  if (code === "AI_PROVIDER_FORBIDDEN") {
+    return new Error(
+      "OpenAI denied this request. Verify the API project's model permissions and organization access.",
+    );
+  }
+  if (code === "AI_PROVIDER_RATE_LIMITED") {
+    return new Error(
+      "OpenAI rate-limited the extraction. Check API billing and usage limits, then retry.",
+    );
+  }
+  if (code === "AI_PROVIDER_NETWORK_ERROR") {
+    return new Error("The server could not connect to OpenAI. Check outbound network access.");
+  }
+  if (code === "AI_PROVIDER_SERVER_ERROR") {
+    return new Error("OpenAI returned a server error. Retry after a short delay.");
+  }
+  if (code === "AI_PROVIDER_SCHEMA_ERROR") {
+    const details =
+      error instanceof Error && "details" in error
+        ? String((error as Error & { details?: unknown }).details)
+        : "";
+    return new Error(
+      details
+        ? `Extraction provider rejected the schema: ${details}`
+        : "Extraction provider rejected the schema sent by the server.",
+    );
+  }
+  if (code.startsWith("AI_PROVIDER_HTTP_")) {
+    return new Error(`OpenAI rejected the extraction request (${code.replace("AI_PROVIDER_HTTP_", "HTTP ")}).`);
+  }
   return error instanceof Error ? error : new Error("The request could not be completed.");
 }
 
@@ -377,7 +458,7 @@ export const extractDocument = createServerFn({ method: "POST" })
       .from("audit_log")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .eq("action", "document_processing_consented")
+      .eq("action", "document_extracted")
       .gte("at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
     if (quotaError) throw new Error("Processing quota could not be checked.");
     if ((count ?? 0) >= 10) {
@@ -392,7 +473,7 @@ export const extractDocument = createServerFn({ method: "POST" })
         doc_type: data.docType,
         synthetic_only: true,
         external_ai_provider: "OpenAI",
-        model: process.env.AI_MODEL ?? "gpt-4.1-mini-2025-04-14",
+        model: process.env.AI_MODEL ?? "gpt-4.1",
         consent_notice_version: "openai-synthetic-v1",
       },
       rule_version: "extract-evidence-v2",

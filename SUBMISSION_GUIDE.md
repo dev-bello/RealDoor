@@ -10,7 +10,7 @@
 OPENAI_API_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 AI_API_URL=https://api.openai.com/v1/responses
-AI_MODEL=gpt-4.1-mini-2025-04-14
+AI_MODEL=gpt-4.1
 ```
 
 4. Set the public Supabase URL and publishable key in the existing `SUPABASE_*` and `VITE_SUPABASE_*` variables.

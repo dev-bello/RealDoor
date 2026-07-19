@@ -409,8 +409,66 @@ function readinessReason(reason: ProfileReadinessReason): string {
 }
 
 function printPacket(packet: Packet) {
-  const printable = escapeHtml(JSON.stringify(packet, null, 2));
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>RealDoor packet</title><style>body{font-family:system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1{font-family:Georgia,serif}pre{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #bbb;padding:1rem}@media print{body{margin:0}}</style></head><body><h1>Application-readiness packet</h1><p>This packet reports organizer review readiness, not an eligibility decision.</p><pre>${printable}</pre></body></html>`;
+  const text = (value: unknown) => escapeHtml(String(value ?? "Not available"));
+  const list = (items: string[], empty: string) =>
+    items.length ? `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : `<p>${empty}</p>`;
+  const incomeSources =
+    packet.incomeSources?.map(
+      (source) =>
+        `<strong>${text(source.personName ?? source.kind)}</strong><br>${text(source.formula)}<br>Annual amount: ${text(money(source.annualAmount))}${source.conflict ? `<br>Review note: ${text(source.conflict)}` : ""}`,
+    ) ?? [];
+  const requiredDocuments = packet.requiredDocuments.map(
+    (document) =>
+      `<strong>${text(document.label)}</strong>: ${text(document.status.replaceAll("_", " "))}<br>Evidence: ${text(document.evidenceIds.length ? document.evidenceIds.join(", ") : "None")}${document.reasons.length ? `<br>Review notes: ${text(document.reasons.join("; "))}` : ""}`,
+  );
+  const evidence = packet.evidence.map(
+    (document) =>
+      `<strong>${text(document.documentType.replaceAll("_", " "))}</strong> (${text(document.id)})${list(
+        document.fields.map(
+          (field) =>
+            `${text(field.field.replaceAll("_", " "))}: ${text(formatValue(field.value))} (page ${text(field.sourceBox.page)}, box ${text(field.sourceBox.bbox.join(", "))})`,
+        ),
+        "No confirmed fields.",
+      )}`,
+  );
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>RealDoor application-readiness packet</title>
+    <style>
+      body{font-family:system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#171717;line-height:1.5}
+      h1,h2{font-family:Georgia,serif}h1{margin-bottom:.25rem}h2{margin-top:1.75rem;padding-bottom:.3rem;border-bottom:1px solid #bbb;font-size:1.2rem}
+      dl{display:grid;grid-template-columns:max-content 1fr;gap:.35rem 1rem}dt{font-weight:700}dd{margin:0}li{margin:.4rem 0}.notice{padding:.75rem;border:1px solid #999}.notes{white-space:pre-wrap}
+      @media print{body{margin:0;max-width:none}h2{break-after:avoid}li{break-inside:avoid}}
+    </style>
+  </head>
+  <body>
+    <h1>Application-readiness packet</h1>
+    <p class="notice">${text(packet.readiness.scope)}</p>
+    <dl>
+      <dt>Status</dt><dd>${text(packet.readiness.status.replaceAll("_", " "))}</dd>
+      <dt>Generated</dt><dd>${text(new Date(packet.generatedAt).toLocaleString("en-US"))}</dd>
+      <dt>Household</dt><dd>${text(packet.household_id)}</dd>
+      <dt>Household size</dt><dd>${text(packet.household?.size)}</dd>
+      <dt>Annual income</dt><dd>${packet.comparison ? text(money(packet.comparison.exactAnnualIncome)) : "Not included"}</dd>
+      <dt>Published threshold</dt><dd>${packet.comparison ? text(money(packet.comparison.threshold)) : "Not included"}</dd>
+      <dt>Comparison</dt><dd>${packet.comparison ? text(packet.comparison.result.replaceAll("_", " ")) : "Not included"}</dd>
+    </dl>
+    <h2>Readiness reasons</h2>
+    ${list(packet.readiness.reasons.map(text), "No readiness exceptions.")}
+    <h2>Income sources</h2>
+    ${list(incomeSources, "No income sources included or calculable.")}
+    <h2>Required documents</h2>
+    ${list(requiredDocuments, "No required-document information available.")}
+    <h2>Confirmed evidence</h2>
+    ${list(evidence, "No confirmed evidence available.")}
+    <h2>Packet notes</h2>
+    <p class="notes">${text(packet.notes || "No notes added.")}</p>
+    <h2>Rule source</h2>
+    <p>Version ${text(packet.rule.version)}, effective ${text(packet.rule.effectiveDate)}. ${text(packet.rule.metro)}. ${text(packet.rule.citation.publisher)}, <cite>${text(packet.rule.citation.document)}</cite>, ${text(packet.rule.citation.page)}.</p>
+  </body>
+</html>`;
   const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
   const frame = document.createElement("iframe");
   frame.title = "Printable RealDoor packet";
