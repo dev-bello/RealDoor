@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     tanstackStart({ server: { entry: "server" } }),
-    nitro({ preset: "cloudflare_module" }),
+    nitro({ preset: process.env.NITRO_PRESET ?? "cloudflare_module" }),
     viteReact(),
   ],
 });
